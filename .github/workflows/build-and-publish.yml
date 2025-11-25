@@ -1,0 +1,31 @@
+name: Build Golden Image
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Packer
+        uses: hashicorp/actions/packer-build-action@v1
+        with:
+          template: packer/ubuntu-k8s-encrypted.pkr.hcl
+          var_files: |
+            variables.pkrvars.hcl
+        env:
+          PACKER_VAR_encryption_passphrase: ${{ secrets.ENCRYPTION_PASSPHRASE }}
+
+      - name: Upload QCOW2 to Releases
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./output-qemu/*.qcow2
+          asset_name: secure-k8s-${{ github.ref_name }}.qcow2
+          asset_content_type: application/octet-stream
