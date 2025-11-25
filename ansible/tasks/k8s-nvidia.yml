@@ -1,0 +1,40 @@
+---
+- name: Install Kubernetes repo
+  apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/kubernetes.gpg] https://pkgs.k8s.io/core:/stable:/v{{ k8s_version }}/deb/ /"
+    state: present
+
+- name: Install K8s binaries
+  apt:
+    name: [kubelet={{ k8s_version }}*, kubeadm={{ k8s_version }}*, kubectl={{ k8s_version }}*]
+    state: present
+  notify: hold k8s packages
+
+- name: Install containerd
+  apt:
+    name: containerd.io
+    state: present
+
+- name: Configure containerd
+  copy:
+    content: |
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+        SystemdCgroup = true
+    dest: /etc/containerd/config.toml
+
+- name: Install NVIDIA drivers
+  apt:
+    name: [nvidia-driver-{{ nvidia_driver }}, nvidia-container-toolkit]
+    state: present
+
+- name: Restart containerd
+  systemd:
+    name: containerd
+    state: restarted
+    enabled: yes
+
+handlers:
+  - name: hold k8s packages
+    apt:
+      name: [kubelet, kubeadm, kubectl]
+      state: hold
