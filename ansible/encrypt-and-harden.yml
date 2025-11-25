@@ -1,0 +1,46 @@
+---
+- name: Encrypt and harden golden K8s image
+  hosts: localhost
+  become: yes
+  vars:
+    tpm2_auto_unlock: true
+
+  tasks:
+    - name: Create detached LUKS header
+      command: dd if=/dev/zero of=/crypto_header.bin bs=1M count=4
+      args:
+        creates: /crypto_header.bin
+
+    - name: Encrypt root partition (LUKS2 + Argon2id)
+      command: >
+        cryptsetup luksFormat --type luks2 --cipher aes-xts-plain64 --key-size 512 --hash sha512
+        --pbkdf argon2id --pbkdf-force-iterations 4 --pbkdf-memory 1048576
+        --header /crypto_header.bin /dev/sda3 <<< "{{ encryption_passphrase }}"
+
+    - name: Open LUKS container
+      command: cryptsetup luksOpen --header /crypto_header.bin /dev/sda3 cryptroot
+
+    - name: Create LVM on decrypted device
+      lvg:
+        vg: ubuntu-vg
+        pvs: /dev/mapper/cryptroot
+
+    - name: Extend root LV and resize filesystem
+      lvol:
+        vg: ubuntu-vg
+        lv: root
+        size: 100%FREE
+        resizefs: yes
+
+    - name: Install TPM2 tools for auto-unlock
+      when: tpm2_auto_unlock
+      apt:
+        name: [tpm2-tools, clevis, clevis-luks, clevis-tpm2]
+        state: present
+
+    - name: Bind LUKS to TPM2 PCRs
+      when: tpm2_auto_unlock
+      command: clevis luks bind -d /dev/sda3 tpm2 '{"pcr_ids":"0,7"}' <<< "{{ encryption_passphrase }}"
+
+    - name: Include K8s + NVIDIA tasks
+      include_tasks: tasks/k8s-nvidia.yml
