@@ -1,0 +1,6 @@
+output-*/
+*.qcow2
+.vagrant/
+.idea/
+*.swp
+.DS_Store
