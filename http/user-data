@@ -1,0 +1,9 @@
+#cloud-config
+autoinstall:
+  version: 1
+  identity:
+    hostname: k8s-golden-node
+    username: ubuntu
+    password: "$6$exDY1mhS4KUYCE/2$..."  # Hashed 'ubuntu' – generate with mkpasswd
+  late-commands:
+    - curtin in-target -- apt update && apt install -y cryptsetup lvm2
